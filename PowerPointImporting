@@ -1,0 +1,97 @@
+' Use by adding the words "Import:" to an object in powerpoint then behind the colon have the sheet the object's 
+' on followed by a ! and then object's name and then vertical offset (optional)
+' Example: Import:Figures!SalesPieLy,100
+
+Sub ExportToPowerPoint()
+    'On Error Resume Next
+    Set AW = ActiveWorkbook
+    Dim pp As PowerPoint.Application, f As FileDialog
+    Set pp = CreateObject("Powerpoint.Application")
+    Set f = Application.FileDialog(msoFileDialogOpen)
+    f.InitialFileName = ActiveWorkbook.Path
+    f.AllowMultiSelect = False
+    t = f.Show
+    If t = 0 Then Exit Sub
+    pp.Activate
+    If pp.Presentations.Count = 0 Then
+        Set pt = pp.Presentations.Open(f.SelectedItems(1))
+    Else
+        For Each p In pp.Presentations
+            If p.FullName = f.SelectedItems(1) Then
+                Set pt = p
+            End If
+        Next p
+    End If
+    
+    If pt Is Nothing Then
+        Set pt = pp.Presentations.Open(f.SelectedItems(1))
+    End If
+    Dim sl As PowerPoint.Slide
+    
+
+    For Each sl In pt.Slides
+        For Each sh In sl.Shapes
+            If Not sh.HasTextFrame Then GoTo NextShape
+            If Not sh.TextFrame.HasText Then GoTo NextShape
+            st = sh.TextFrame.TextRange.Text
+            pos = InStr(1, st, "Import:", vbTextCompare)
+            If pos > 0 Then
+                sheet = clean(Mid(st, pos + 7, InStr(1, st, "!") - (pos + 7)))
+                obj = clean(Mid(st, InStr(1, st, "!") + 1, InStr(1, st, ",") - InStr(1, st, "!") - 1))
+                VOffset = clean(Mid(st, InStr(1, st, ",") + 1, 9999))
+                If ObjExist(sl.Shapes, obj) Then
+                    sl.Shapes(obj).Delete
+                End If
+                Set t = GetShape(sheet, obj)
+                t.CopyPicture Appearance:=xlScreen, Format:=xlPicture
+                pp.Activate
+                pp.ActiveWindow.View.GotoSlide (sl.SlideNumber)
+                sl.Select
+                Set pasteshape = sl.Shapes.Paste
+  
+                pasteshape.Name = obj
+                pasteshape.Select
+                pp.ActiveWindow.Selection.ShapeRange.Align msoAlignCenters, True
+                pp.ActiveWindow.Selection.ShapeRange.Align msoAlignMiddles, True
+                If Val(VOffset) > 0 Then
+                    pasteshape.Top = Val(VOffset)
+                End If
+            End If
+NextShape:
+        Next sh
+    Next sl
+    Set pp = Nothing
+    
+    MsgBox ("Completed!")
+Finish:
+End Sub
+
+Function GetShape(sheet, s) As Variant
+    For Each sh In Sheets(sheet).Shapes
+        If LCase(sh.Name) = LCase(s) Then
+            Set GetShape = sh
+            Exit Function
+        End If
+    Next sh
+    GetShape = Null
+End Function
+
+Function clean(s) As String
+    temps = ""
+    For i = 1 To Len(s)
+        b = Mid(s, i, 1)
+        If b Like "[A-Z,a-z,0-9, ]" Then
+            temps = temps & b
+        End If
+    Next i
+    clean = temps
+End Function
+
+Function ObjExist(ob, s) As Boolean
+On Error GoTo fail
+    Set t = ob(s)
+    ObjExist = True
+    Exit Function
+fail:
+    ObjExist = False
+End Function
